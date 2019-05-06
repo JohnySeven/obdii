@@ -1,6 +1,7 @@
 ﻿using Elm327.Core;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -16,6 +17,7 @@ namespace Obd2Test
         private bool _isRunning = false;
         private string _instance = "OBDII";
         private string _engineName;
+        private string _logFile;
         private Thread _thread;
         private Dictionary<string, string> _config;
         private int _noDataCounter = 0;
@@ -50,6 +52,7 @@ namespace Obd2Test
             _serverPort = GetConfig("server.port", 55557);
             _instance = GetConfig("name", _instance);
             _engineName = GetConfig("engine", "none");
+            _logFile = GetConfig<string>("log", null);
 
             if (string.IsNullOrEmpty(_port))
             {
@@ -171,6 +174,11 @@ namespace Obd2Test
         private void Log(object obj)
         {
             Console.WriteLine(obj?.ToString());
+
+            if (!string.IsNullOrEmpty(_logFile))
+            {
+                File.AppendText($"{DateTime.Now}:{obj?.ToString()}");
+            }
         }
 
         private void SendToSignalK(Dictionary<string, object> values)
