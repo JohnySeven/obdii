@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Obd2Test": {
+      "commandName": "Project",
+      "commandLineArgs": "-serial COM3 -name TEST -engine TEST"
+    }
+  }
+}
