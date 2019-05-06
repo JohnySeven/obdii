@@ -56,7 +56,7 @@ namespace Obd2Test
 
             if (string.IsNullOrEmpty(_port))
             {
-                throw new ArgumentException("-serial must be filled in!");
+                throw new ArgumentException("-serial parameter must be filled in!");
             }
         }
 
