@@ -215,7 +215,7 @@ namespace Elm327.Core.ObdModes
                         Util.ConvertHexToInt(reading[0]) - 40;
                 }
                 else
-                    return 0;
+                    return 0d;
             }
         }
 
@@ -422,6 +422,29 @@ namespace Elm327.Core.ObdModes
         }
 
         /// <summary>
+        /// Gets the intake air temperature (in celsius or farenheit,
+        /// depending on the current unit selection).
+        /// </summary>
+        public double IntakeManifoldPressure
+        {
+            get
+            {
+                // The formula for this value is (A-40)
+
+                string[] reading = this.GetPidResponse("0B");
+
+                if (reading.Length > 0)
+                {
+                    return Util.ConvertHexToInt(reading[0]);
+                }
+                else
+                    return 0;
+            }
+        }
+
+        //0B
+
+        /// <summary>
         /// Gets the current MAF rate in grams/sec.
         /// </summary>
         public double MassAirFlowRate
@@ -489,6 +512,20 @@ namespace Elm327.Core.ObdModes
                     this.MeasuringUnitType == ElmDriver.ElmMeasuringUnitType.English ?
                     Util.ConvertKilometersToMiles(this.VehicleSpeedInKilometersPerHour) :
                     this.VehicleSpeedInKilometersPerHour;
+            }
+        }
+
+        public double EngineLoad
+        {
+            get
+            {
+                //04
+                string[] reading = this.GetPidResponse("04");
+
+                return
+                    reading.Length > 0 ?
+                    (Util.ConvertHexToInt(reading[0]) * 100) / 255 :
+                    0;
             }
         }
 

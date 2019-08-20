@@ -9,10 +9,4 @@
     <PackageReference Include="System.IO.Ports" Version="4.6.0-preview4.19212.13" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="Obd2NET">
-      <HintPath>Lib\Obd2NET.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>

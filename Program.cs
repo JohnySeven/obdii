@@ -1,5 +1,4 @@
 ﻿using Elm327.Core;
-using Obd2NET;
 using System;
 using System.Collections.Generic;
 using System.IO;

@@ -1,6 +1,7 @@
 ﻿using Elm327.Core;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -18,9 +19,11 @@ namespace Obd2Test
         private string _instance = "OBDII";
         private string _engineName;
         private string _logFile;
+        private int _noDataTimeout;
         private Thread _thread;
         private Dictionary<string, string> _config;
-        private int _noDataCounter = 0;
+        private DateTime? _lastData = null;
+        private int _readInterval = 1000;
 
         public void Run(Dictionary<string, string> arguments)
         {
@@ -53,6 +56,8 @@ namespace Obd2Test
             _instance = GetConfig("name", _instance);
             _engineName = GetConfig("engine", "none");
             _logFile = GetConfig<string>("log", null);
+            _noDataTimeout = GetConfig("datatimeout", 10000);
+            _readInterval = GetConfig("readinterval", _readInterval);
 
             if (string.IsNullOrEmpty(_port))
             {
@@ -106,7 +111,7 @@ namespace Obd2Test
 
                 using (var driver = new ElmDriver(_port, ElmDriver.ElmObdProtocolType.Automatic, ElmDriver.ElmMeasuringUnitType.Metric))
                 {
-                    _noDataCounter = 0;
+                    _lastData = null;
                     Log($"Connecting to OBDII...");
 
                     var result = driver.Connect();
@@ -116,6 +121,7 @@ namespace Obd2Test
 
                     if (result == ElmDriver.ElmConnectionResultType.Connected)
                     {
+                        _lastData = DateTime.UtcNow;
                         /*for (int i = 0; i < 53; i++)
                         {
                             Console.WriteLine($"PID: {i} - {i.ToString("x")}");
@@ -129,34 +135,35 @@ namespace Obd2Test
                         {
                             var rpm = driver.ObdMode01.EngineRpm;
                             var temp = driver.ObdMode01.EngineCoolantTemperature;
-                            var massAirflow = driver.ObdMode01.MassAirFlowRate;
+                            var intakeManifoldPressure = driver.ObdMode01.IntakeManifoldPressure;
+                            //var engineLoad = driver.ObdMode01.EngineLoad;
+                            //var massAirflow = driver.ObdMode01.MassAirFlowRate;
 
-                            var line = $"{DateTime.Now.ToShortTimeString()}\tRPM: {rpm}, Temp: {temp} C, Mass airflow: {massAirflow} g/s, NoData: {_noDataCounter}";
+                            var line = $"{DateTime.Now.ToShortTimeString()}\tRPM: {rpm}, Temp: {temp} C, Intake pressure: {intakeManifoldPressure} kPA, Last data: {(_lastData != null ? (DateTime.UtcNow - _lastData.Value).ToString() : "never")}";
+
                             Log(line);
 
-                            if(rpm == 0)
+                            if (rpm != 0 && temp != 0)
                             {
-                                _noDataCounter++;
-                            }
-                            else
-                            {
-                                _noDataCounter = 0;
-                            }
-
-                            if(_noDataCounter > 10)
-                            {
-                                break;
+                                _lastData = DateTime.UtcNow;
                             }
 
                             var signalKData = new Dictionary<string, object>
                             {
                                 { $"propulsion.engine.{_engineName}.revolutions", Math.Round(rpm, 2) },
-                                { $"propulsion.engine.{_engineName}.temperature", Math.Round(temp +  273.15)}
+                                { $"propulsion.engine.{_engineName}.temperature", Math.Round(temp +  273.15)},
+                                { $"propulsion.engine.{_engineName}.boostPressure", Math.Round(intakeManifoldPressure * 1000.0) }
                             };
 
                             SendToSignalK(signalKData);
 
-                            Thread.Sleep(1000);
+                            Thread.Sleep(_readInterval);
+
+                            if (_lastData != null && _lastData.Value.AddMilliseconds(_noDataTimeout) < DateTime.UtcNow)
+                            {
+                                Log($"Connection timeout, disconnecting...");
+                                break;
+                            }
                         }
                     }
                     else
@@ -171,9 +178,18 @@ namespace Obd2Test
             }
         }
 
+        private void SetUSB(bool powerStatus)
+        {
+            using(var writer = new StreamWriter(@"/sys/devices/platform/soc/20980000.usb/buspower"))
+            {
+                writer.Write(powerStatus ? "0" : "1");
+            }
+        }
+
         private void Log(object obj)
         {
-            Console.WriteLine(obj?.ToString());
+            Trace.WriteLine(obj);
+            //Console.WriteLine(obj?.ToString());
 
             if (!string.IsNullOrEmpty(_logFile))
             {
@@ -208,7 +224,7 @@ namespace Obd2Test
 
             cmd += "]}]}";
 
-            Log(cmd);
+            //Log(cmd);
             
             using (var udp = new UdpClient(_server, _serverPort))
             {

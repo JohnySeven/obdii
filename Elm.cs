@@ -547,7 +547,9 @@ namespace Elm327.Core
             // it means we're unable to see it (probably a wiring issue).
 
             if (this.SendAndReceiveMessage("ATZ") == null)
+            {
                 return ElmConnectionResultType.NoConnectionToElm;
+            }
 
             // Turn line feeds and echo off, turn on space printing (as our code currently
             // expects it) and retrieve the ELM's version information
@@ -566,14 +568,14 @@ namespace Elm327.Core
 
             //this.ProtocolType = this.protocolType;
 
-            var isConnected = true;
+            var isConnected = false;
             string response;
 
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 2; i++)
             {
                 response = this.SendAndReceiveMessage("0100");
 
-                if (response == null && response?.IndexOf("41 00") != -1)
+                if (response != null && !response.Contains("ERROR") && response?.IndexOf("41 00") != -1)
                 {
                     isConnected = true;
                     break;
