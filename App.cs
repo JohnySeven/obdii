@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -131,31 +133,70 @@ namespace Obd2Test
                             Console.WriteLine(String.Join(Environment.NewLine, response));
                         }*/
 
+                        var counter = 0;
+
                         while (_isRunning)
                         {
-                            var rpm = driver.ObdMode01.EngineRpm;
-                            var temp = driver.ObdMode01.EngineCoolantTemperature;
-                            var intakeManifoldPressure = driver.ObdMode01.IntakeManifoldPressure;
+                            //var rpm = driver.ObdMode01.EngineRpm;
+                            //var temp = driver.ObdMode01.EngineCoolantTemperature;
+                            //var intakeManifoldPressure = driver.ObdMode01.IntakeManifoldPressure;
+
+                            //rpm = ;
                             //var engineLoad = driver.ObdMode01.EngineLoad;
                             //var massAirflow = driver.ObdMode01.MassAirFlowRate;
 
-                            var line = $"{DateTime.Now.ToShortTimeString()}\tRPM: {rpm}, Temp: {temp} C, Intake pressure: {intakeManifoldPressure} kPA, Last data: {(_lastData != null ? (DateTime.UtcNow - _lastData.Value).ToString() : "never")}";
+                            
+
+                           
+                            var signalKData = new Dictionary<string, Func<int, double?>>
+                            {
+                                { $"propulsion.engine.{_engineName}.revolutions", c =>
+                                {
+                                    var rpm = driver.ObdMode01.EngineRpm;
+                                    Log($"RPM={rpm}");
+                                    return RoundToTen(rpm) / 60.0;
+                                }
+                                },
+                                { $"propulsion.engine.{_engineName}.temperature", c =>
+                                {
+                                    if(c % 5 == 0)
+                                    {
+                                        return Math.Round(driver.ObdMode01.EngineCoolantTemperature +  273.15);
+                                    }
+                                    return null;
+                                } },
+                                { $"propulsion.engine.{_engineName}.boostPressure", c =>
+                                {
+                                    if(c % 5 == 0){
+                                    return Math.Round(driver.ObdMode01.IntakeManifoldPressure * 1000.0);
+                                    }
+
+                                    return null;
+                                } }
+                            };
+
+                            counter++;
+
+                            if (counter > 100000)
+                            {
+                                counter = 0;
+                            }
+
+                            var data = signalKData.Select(k => new { key = k.Key, value = k.Value(counter) })
+                                                  .Where(k => k.value != null)
+                                                  .ToDictionary(k => k.key, v => (object)v.value.Value);
+
+                            var line = $"{DateTime.Now.ToShortTimeString()}\t{string.Join(";", data.Select(i => $"{i.Key}={i.Value}"))}, Last data: {(_lastData != null ? (DateTime.UtcNow - _lastData.Value).ToString() : "never")}";
 
                             Log(line);
 
-                            if (rpm != 0 && temp != 0)
-                            {
-                                _lastData = DateTime.UtcNow;
-                            }
+                           if (data.Any(i => i.Value != null))
+                           {
+                               _lastData = DateTime.UtcNow;
+                           }
 
-                            var signalKData = new Dictionary<string, object>
-                            {
-                                { $"propulsion.engine.{_engineName}.revolutions", Math.Round(rpm, 2) },
-                                { $"propulsion.engine.{_engineName}.temperature", Math.Round(temp +  273.15)},
-                                { $"propulsion.engine.{_engineName}.boostPressure", Math.Round(intakeManifoldPressure * 1000.0) }
-                            };
 
-                            SendToSignalK(signalKData);
+                            SendToSignalK(data);
 
                             Thread.Sleep(_readInterval);
 
@@ -176,6 +217,11 @@ namespace Obd2Test
             {
                 Log($"Reader failed: {ex}");
             }
+        }
+
+        private double RoundToTen(double value)
+        {
+            return ((int)Math.Round(value / 10.0f) * 10);
         }
 
         private void SetUSB(bool powerStatus)
@@ -212,9 +258,9 @@ namespace Obd2Test
                 {
                     valueString = $"\"{item.Value}\"";
                 }
-                else if (item.Value is double)
+                else if (item.Value is double number)
                 {
-                    valueString = item.Value.ToString();
+                    valueString = number.ToString(CultureInfo.InvariantCulture);
                 }
 
                 cmd += @"{""path"":""" + item.Key + @""", ""value"": " + valueString + "},";
