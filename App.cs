@@ -153,6 +153,12 @@ namespace Obd2Test
                                 { $"propulsion.engine.{_engineName}.revolutions", c =>
                                 {
                                     var rpm = driver.ObdMode01.EngineRpm;
+
+                                    if(rpm == 0.0)
+                                    {
+                                        return null;
+                                    }
+
                                     Log($"RPM={rpm}");
                                     return RoundToTen(rpm) / 60.0;
                                 }
@@ -161,14 +167,30 @@ namespace Obd2Test
                                 {
                                     if(c % 5 == 0)
                                     {
-                                        return Math.Round(driver.ObdMode01.EngineCoolantTemperature +  273.15);
+                                        var temp = driver.ObdMode01.EngineCoolantTemperature;
+
+                                        if(temp == 0.0)
+                                        {
+                                            return null;
+                                        }
+
+                                        return Math.Round(temp +  273.15);
                                     }
+
                                     return null;
                                 } },
                                 { $"propulsion.engine.{_engineName}.boostPressure", c =>
                                 {
-                                    if(c % 5 == 0){
-                                    return Math.Round(driver.ObdMode01.IntakeManifoldPressure * 1000.0);
+                                    if(c % 5 == 0)
+                                    {
+                                        var pressure = driver.ObdMode01.IntakeManifoldPressure;
+
+                                        if(pressure == 0.0)
+                                        {
+                                            return null;
+                                        }
+
+                                        return Math.Round(pressure * 1000.0);
                                     }
 
                                     return null;
@@ -245,9 +267,6 @@ namespace Obd2Test
 
         private void SendToSignalK(Dictionary<string, object> values)
         {
-            var server = _server;
-
-            
             var cmd = @"{""updates"": [{""$source"": ""SOURCE-HERE"",""values"":[".Replace("SOURCE-HERE", _instance);
 
             foreach (var item in values)
